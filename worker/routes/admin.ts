@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { invitationSchema } from "../../shared/schemas";
-import { audit } from "../lib/db";
+import { audit, deleteLoreEntry } from "../lib/db";
 import { randomToken, sha256 } from "../lib/crypto";
 import { AppError, jsonBody } from "../lib/http";
 import { requireAdmin, requireAuth, requireCsrf } from "../middleware/auth";
@@ -17,6 +17,7 @@ admin.get("/overview", async (c) => {
     invitations,
     sessions,
     lore,
+    approvedLore,
     posts,
     comments,
     media,
@@ -45,6 +46,9 @@ admin.get("/overview", async (c) => {
     ).all(),
     c.env.DB.prepare(
       "SELECT l.*,u.display_name proposer_name FROM lore_entries l JOIN users u ON u.id=l.proposer_id WHERE l.status='PENDING' ORDER BY l.created_at",
+    ).all(),
+    c.env.DB.prepare(
+      "SELECT l.*,u.display_name proposer_name FROM lore_entries l JOIN users u ON u.id=l.proposer_id WHERE l.status='APPROVED' ORDER BY COALESCE(l.happened_at,l.created_at) DESC",
     ).all(),
     c.env.DB.prepare(
       "SELECT p.id,p.title,p.happened_at,p.is_featured,p.created_at,u.display_name author_name FROM posts p JOIN users u ON u.id=p.author_id WHERE p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 50",
@@ -82,6 +86,7 @@ admin.get("/overview", async (c) => {
     invitations: invitations.results,
     sessions: sessions.results,
     lore: lore.results,
+    approvedLore: approvedLore.results,
     posts: posts.results,
     comments: comments.results,
     media: media.results,
@@ -239,6 +244,21 @@ admin.patch("/lore/:id", requireCsrf, async (c) => {
     lore.id,
   );
   return c.json({ ok: true });
+});
+
+admin.delete("/lore/:id", requireCsrf, async (c) => {
+  const deleted = await deleteLoreEntry(c.env.DB, c.req.param("id"));
+  if (!deleted)
+    throw new AppError(404, "LORE_NOT_FOUND", "Entrada de lore no encontrada.");
+  await audit(
+    c.env.DB,
+    c.get("member").id,
+    "LORE_DELETED",
+    "lore",
+    deleted.id,
+    { status: deleted.status },
+  );
+  return c.body(null, 204);
 });
 
 admin.patch("/posts/:id", requireCsrf, async (c) => {

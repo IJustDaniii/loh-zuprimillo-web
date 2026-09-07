@@ -81,6 +81,18 @@ export function AdminPage() {
       setMessage(caught.message);
     }
   };
+  const removeLore = async (entry: any) => {
+    if (
+      !confirm(
+        `Esta acción eliminará permanentemente «${entry.title}». ¿Continuar?`,
+      )
+    )
+      return;
+    await mutate(
+      () => api(`/api/admin/lore/${entry.id}`, { method: "DELETE" }),
+      "Entrada de lore eliminada",
+    );
+  };
   const createInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -568,11 +580,44 @@ export function AdminPage() {
                   >
                     <Check /> Aprobar
                   </button>
+                  <button
+                    className="button small"
+                    onClick={() => void removeLore(entry)}
+                  >
+                    <Trash2 /> Eliminar
+                  </button>
                 </div>
               </article>
             ))
           ) : (
             <Empty text="No hay propuestas pendientes." />
+          )}
+        </Section>
+      )}
+      {tab === "lore" && (
+        <Section title="Entradas aprobadas">
+          {data.approvedLore.length ? (
+            data.approvedLore.map((entry: any) => (
+              <article className="lore-review" key={entry.id}>
+                <div>
+                  <p className="eyebrow">CANON APROBADO</p>
+                  <h3>{entry.title}</h3>
+                  <strong>{entry.summary}</strong>
+                  <p>{entry.body}</p>
+                  <small>Propuesto por {entry.proposer_name}</small>
+                </div>
+                <div>
+                  <button
+                    className="button small"
+                    onClick={() => void removeLore(entry)}
+                  >
+                    <Trash2 /> Eliminar
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <Empty text="No hay entradas aprobadas." />
           )}
         </Section>
       )}
