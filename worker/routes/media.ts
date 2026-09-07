@@ -1,5 +1,12 @@
 import { Hono } from "hono";
 import { AppError, privateHeaders } from "../lib/http";
+import {
+  D1_UPLOAD_RESERVE_BYTES,
+  getStorageLimits,
+  readD1StorageBytes,
+  releaseR2Storage,
+  reserveR2Storage,
+} from "../lib/storage";
 import { requireAuth, requireCsrf } from "../middleware/auth";
 import type { AppEnv } from "../types";
 
@@ -63,6 +70,25 @@ media.post("/", requireCsrf, async (c) => {
       "FILE_TYPE_BLOCKED",
       "Ese tipo de archivo no está permitido.",
     );
+  const limits = await getStorageLimits(c.env.DB);
+  const d1Bytes = await readD1StorageBytes(c.env.DB);
+  if (d1Bytes + D1_UPLOAD_RESERVE_BYTES > limits.d1LimitBytes)
+    throw new AppError(
+      413,
+      "D1_STORAGE_LIMIT",
+      "La base de datos esta en su limite preventivo. Dani debe liberar espacio antes de subir mas archivos.",
+    );
+  const reserved = await reserveR2Storage(
+    c.env.DB,
+    file.size,
+    limits.r2LimitBytes,
+  );
+  if (!reserved)
+    throw new AppError(
+      413,
+      "R2_STORAGE_LIMIT",
+      "El almacenamiento de archivos esta lleno. Dani debe liberar espacio antes de subir mas archivos.",
+    );
   const id = crypto.randomUUID();
   const key = `${c.get("member").id}/${new Date().toISOString().slice(0, 10)}/${id}`;
   const buffer = await file.arrayBuffer();
@@ -76,11 +102,11 @@ media.post("/", requireCsrf, async (c) => {
   const sha = Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
-  await c.env.MEDIA.put(key, buffer, {
-    httpMetadata: { contentType: file.type },
-    customMetadata: { ownerId: c.get("member").id, mediaId: id },
-  });
   try {
+    await c.env.MEDIA.put(key, buffer, {
+      httpMetadata: { contentType: file.type },
+      customMetadata: { ownerId: c.get("member").id, mediaId: id },
+    });
     await c.env.DB.prepare(
       "INSERT INTO media (id,owner_id,r2_key,kind,mime_type,original_name,byte_size,sha256) VALUES (?,?,?,?,?,?,?,?)",
     )
@@ -97,6 +123,7 @@ media.post("/", requireCsrf, async (c) => {
       .run();
   } catch (error) {
     await c.env.MEDIA.delete(key);
+    await releaseR2Storage(c.env.DB, file.size);
     throw error;
   }
   return c.json(

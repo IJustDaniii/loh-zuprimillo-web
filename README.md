@@ -119,6 +119,18 @@ Para diez personas debería caber holgadamente en las capas gratuitas si los ví
 
 El límite inicial por archivo es 50 MB y Dani puede cambiarlo en Ajustes (máximo 250 MB en la aplicación, aunque el plan Cloudflare puede imponer uno menor). Para vídeos grandes, la siguiente ampliación sensata es subida multiparte directa con URL firmada corta.
 
+## ProtecciÃ³n de almacenamiento y costes
+
+La aplicaciÃ³n incluye topes preventivos configurables desde **AdministraciÃ³n â†’ Ajustes**:
+
+- R2 empieza con 8.192 MB y nunca permite configurar mÃ¡s de 9.216 MB.
+- D1 empieza con 400 MB y nunca permite configurar mÃ¡s de 450 MB por debajo del lÃ­mite gratuito de 500 MB por base.
+- El panel **AdministraciÃ³n â†’ Resumen** muestra uso, lÃ­mite, porcentaje, espacio restante y nÃºmero de objetos R2.
+- Cuando un tope se alcanza, el Worker rechaza nuevas subidas antes de escribir en R2. La reserva de R2 es atÃ³mica para evitar que dos subidas simultÃ¡neas rebasen el lÃ­mite.
+- La migraciÃ³n `0002_storage_quotas.sql` inicializa el contador con todos los archivos ya registrados. El Worker tambiÃ©n puede inicializarlo de forma idempotente si el despliegue llega antes que la migraciÃ³n.
+
+Estos controles protegen el almacenamiento de esta aplicaciÃ³n. No pueden limitar otros Workers, buckets, consultas desde la consola ni operaciones externas de la cuenta de Cloudflare; revisa tambiÃ©n el panel de facturaciÃ³n de Cloudflare.
+
 ## Comandos de calidad
 
 ```bash

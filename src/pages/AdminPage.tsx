@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, patchJson, postJson } from "../lib/api";
-import { formatDate } from "../lib/format";
+import { formatBytes, formatDate } from "../lib/format";
 import { Modal } from "../components/Modal";
 import { CatalogForm } from "../components/CatalogForm";
 import { Toast } from "../components/Toast";
@@ -51,6 +51,56 @@ function Section({
 }
 function Empty({ text }: { text: string }) {
   return <p className="muted admin-empty">{text}</p>;
+}
+
+function StorageMeter({
+  label,
+  storage,
+  detail,
+}: {
+  label: string;
+  storage: {
+    usedBytes: number;
+    limitBytes: number;
+    remainingBytes: number;
+    percent: number;
+    blocked: boolean;
+  };
+  detail?: string;
+}) {
+  const state = storage.blocked
+    ? "blocked"
+    : storage.percent >= 80
+      ? "warning"
+      : "healthy";
+  return (
+    <article className={"storage-card " + state}>
+      <header>
+        <strong>{label}</strong>
+        <span>{storage.percent}%</span>
+      </header>
+      <div
+        className="storage-meter"
+        role="progressbar"
+        aria-label={"Uso de " + label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.min(100, storage.percent)}
+      >
+        <i style={{ width: Math.min(100, storage.percent) + "%" }} />
+      </div>
+      <p>
+        <strong>{formatBytes(storage.usedBytes)}</strong> usados de{" "}
+        <strong>{formatBytes(storage.limitBytes)}</strong>
+      </p>
+      <small>
+        {storage.blocked
+          ? "Subidas bloqueadas hasta liberar espacio."
+          : formatBytes(storage.remainingBytes) + " disponibles"}
+        {detail ? " · " + detail : ""}
+      </small>
+    </article>
+  );
 }
 
 export function AdminPage() {
@@ -152,6 +202,29 @@ export function AdminPage() {
               <strong>{data.counts.pending_lore}</strong>
             </div>
           </div>
+          {data.storage && (
+            <Section title="Almacenamiento y protección de costes">
+              <div className="storage-grid">
+                <StorageMeter
+                  label="R2 · archivos privados"
+                  storage={data.storage.r2}
+                  detail={data.storage.r2.objects + " objetos"}
+                />
+                <StorageMeter
+                  label="D1 · base de datos"
+                  storage={data.storage.d1}
+                />
+              </div>
+              {(data.storage.r2.blocked || data.storage.d1.blocked) && (
+                <p className="storage-alert" role="alert">
+                  Las nuevas subidas están bloqueadas automáticamente porque se ha alcanzado un tope preventivo.
+                </p>
+              )}
+              <p className="muted storage-note">
+                Los topes son deliberadamente inferiores a los límites gratuitos de Cloudflare. Puedes ajustarlos en Ajustes, pero la aplicación no permite superar el máximo seguro.
+              </p>
+            </Section>
+          )}
           <Section title="Actividad administrativa reciente">
             {data.audit.length ? (
               <div className="admin-list">

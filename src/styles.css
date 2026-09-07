@@ -1667,6 +1667,75 @@ legend {
 .metric-grid .attention small {
   color: #fff;
 }
+.storage-grid {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.storage-card {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.storage-card > header {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+}
+.storage-card > header span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.storage-meter {
+  height: 0.65rem;
+  margin: 0.9rem 0 0.7rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--line);
+}
+.storage-meter i {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width 0.2s ease;
+}
+.storage-card.warning .storage-meter i {
+  background: #d68a00;
+}
+.storage-card.blocked {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+.storage-card.blocked .storage-meter i {
+  background: var(--danger);
+}
+.storage-card p {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+}
+.storage-card small,
+.storage-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.storage-alert {
+  margin: 0 1rem 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+.storage-note {
+  margin: 0 1rem 1rem;
+}
 .admin-section {
   margin-top: 1rem;
   border: 1px solid var(--line);
@@ -1950,7 +2019,8 @@ legend {
   .poll-grid,
   .lore-grid,
   .admin-columns,
-  .metric-grid {
+  .metric-grid,
+  .storage-grid {
     grid-template-columns: 1fr;
   }
   .page-header .button {

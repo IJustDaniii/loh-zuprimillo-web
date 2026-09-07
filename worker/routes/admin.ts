@@ -4,6 +4,12 @@ import { invitationSchema } from "../../shared/schemas";
 import { audit, deleteLoreEntry } from "../lib/db";
 import { randomToken, sha256 } from "../lib/crypto";
 import { AppError, jsonBody } from "../lib/http";
+import {
+  getStorageUsage,
+  MAX_D1_LIMIT_MB,
+  MAX_R2_LIMIT_MB,
+  parseLimitMb,
+} from "../lib/storage";
 import { requireAdmin, requireAuth, requireCsrf } from "../middleware/auth";
 import type { AppEnv } from "../types";
 
@@ -31,6 +37,7 @@ admin.get("/overview", async (c) => {
     trivia,
     settings,
     auditRows,
+    storage,
   ] = await Promise.all([
     c.env.DB.prepare(
       `SELECT (SELECT COUNT(*) FROM users WHERE status='ACTIVE') active_users,(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL) posts,(SELECT COUNT(*) FROM media) media,(SELECT COUNT(*) FROM lore_entries WHERE status='PENDING') pending_lore`,
@@ -79,6 +86,7 @@ admin.get("/overview", async (c) => {
     c.env.DB.prepare(
       "SELECT a.*,u.display_name actor_name FROM audit_log a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 50",
     ).all(),
+    getStorageUsage(c.env.DB),
   ]);
   return c.json({
     counts,
@@ -102,6 +110,7 @@ admin.get("/overview", async (c) => {
     },
     settings: settings.results,
     audit: auditRows.results,
+    storage,
   });
 });
 
@@ -295,9 +304,11 @@ admin.delete("/comments/:id", requireCsrf, async (c) => {
 });
 
 admin.delete("/media/:id", requireCsrf, async (c) => {
-  const media = await c.env.DB.prepare("SELECT r2_key FROM media WHERE id=?")
+  const media = await c.env.DB.prepare(
+    "SELECT r2_key,byte_size FROM media WHERE id=?",
+  )
     .bind(c.req.param("id"))
-    .first<{ r2_key: string }>();
+    .first<{ r2_key: string; byte_size: number }>();
   if (!media)
     throw new AppError(404, "MEDIA_NOT_FOUND", "Archivo no encontrado.");
   await c.env.MEDIA.delete(media.r2_key);
@@ -306,6 +317,9 @@ admin.delete("/media/:id", requireCsrf, async (c) => {
       "UPDATE users SET avatar_media_id=NULL WHERE avatar_media_id=?",
     ).bind(c.req.param("id")),
     c.env.DB.prepare("DELETE FROM media WHERE id=?").bind(c.req.param("id")),
+    c.env.DB.prepare(
+      "UPDATE storage_usage SET r2_bytes=MAX(0,r2_bytes-?),r2_objects=MAX(0,r2_objects-1),updated_at=datetime('now') WHERE id=1",
+    ).bind(media.byte_size),
   ]);
   await audit(
     c.env.DB,
@@ -339,6 +353,23 @@ admin.delete("/locations/:id", requireCsrf, async (c) => {
 admin.patch("/settings/:key", requireCsrf, async (c) => {
   const input = await jsonBody(c, z.object({ value: z.unknown() }));
   const raw = JSON.stringify(input.value);
+  const key = c.req.param("key");
+  if (key === "r2_storage_limit_mb") {
+    if (parseLimitMb(input.value, 0, MAX_R2_LIMIT_MB) === 0)
+      throw new AppError(
+        422,
+        "R2_LIMIT_INVALID",
+        `El lÃ­mite de R2 debe ser un nÃºmero entero entre 1 y ${MAX_R2_LIMIT_MB} MB.`,
+      );
+  }
+  if (key === "d1_storage_limit_mb") {
+    if (parseLimitMb(input.value, 0, MAX_D1_LIMIT_MB) === 0)
+      throw new AppError(
+        422,
+        "D1_LIMIT_INVALID",
+        `El lÃ­mite de D1 debe ser un nÃºmero entero entre 1 y ${MAX_D1_LIMIT_MB} MB.`,
+      );
+  }
   if (raw.length > 10_000)
     throw new AppError(
       422,
@@ -348,14 +379,14 @@ admin.patch("/settings/:key", requireCsrf, async (c) => {
   await c.env.DB.prepare(
     "UPDATE app_settings SET value_json=?,updated_by=?,updated_at=datetime('now') WHERE key=?",
   )
-    .bind(raw, c.get("member").id, c.req.param("key"))
+    .bind(raw, c.get("member").id, key)
     .run();
   await audit(
     c.env.DB,
     c.get("member").id,
     "SETTING_UPDATED",
     "setting",
-    c.req.param("key"),
+    key,
   );
   return c.json({ ok: true });
 });
