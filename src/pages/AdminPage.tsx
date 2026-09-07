@@ -14,7 +14,13 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { api, patchJson, postJson } from "../lib/api";
 import { formatBytes, formatDate } from "../lib/format";
 import { Modal } from "../components/Modal";
@@ -115,10 +121,23 @@ export function AdminPage() {
     item: any;
   } | null>(null);
   const [message, setMessage] = useState("");
-  const load = async () => setData(await api("/api/admin/overview"));
+  const load = useCallback(async () => {
+    setData(await api("/api/admin/overview"));
+  }, []);
   useEffect(() => {
     void load();
-  }, []);
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [load]);
   const mutate = async (
     work: () => Promise<unknown>,
     success = "Cambios guardados",
