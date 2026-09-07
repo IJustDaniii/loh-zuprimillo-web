@@ -214,7 +214,7 @@ export function AdminPage() {
             </div>
             <div>
               <small>ARCHIVOS R2</small>
-              <strong>{data.counts.media}</strong>
+              <strong>{data.storage?.r2.objects ?? data.counts.media}</strong>
             </div>
             <div className={data.counts.pending_lore ? "attention" : ""}>
               <small>LORE PENDIENTE</small>
