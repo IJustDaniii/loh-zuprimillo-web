@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "loh-zuprimillo",
+  "name": "loh-zuprimillo-web",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-07",
   "assets": {
@@ -26,5 +26,8 @@
   "vars": {
     "APP_ORIGIN": "http://localhost:5173",
     "SESSION_TTL_DAYS": "30",
+  },
+  "secrets": {
+    "required": ["BOOTSTRAP_TOKEN"],
   },
 }
