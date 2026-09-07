@@ -30,7 +30,7 @@ El Worker se ejecuta antes que los assets. La aplicación pública solo contiene
 
 Requisitos: Node.js 22 o posterior y una cuenta de Cloudflare para desplegar (no hace falta para el modo local).
 
-Este repositorio incluye `.npmrc` para ejecutar scripts con PowerShell porque el equipo Windows actual tiene una entrada `PATH` heredada mal formada. Si lo abres en macOS o Linux, elimina la línea `script-shell` de ese archivo.
+Los scripts de build se ejecutan mediante Node y no dependen de PowerShell ni de `sh`, por lo que funcionan tanto en Windows como en el entorno Linux de Cloudflare Workers Builds. Si Windows no encuentra `node` desde `cmd.exe`, corrige el `PATH` local o ejecuta directamente `node scripts/check.mjs`.
 
 ```bash
 npm install
