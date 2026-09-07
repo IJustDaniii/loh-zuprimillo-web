@@ -1,5 +1,11 @@
 # Historial de cambios
 
+## Medios del feed — 2026-09-07
+
+### Corregido
+
+- Las fotos verticales mantienen ahora toda su proporción en el feed y se pueden abrir ampliadas desde cualquier dispositivo.
+
 ## Corrección de despliegue — 2026-09-07
 
 ### Corregido

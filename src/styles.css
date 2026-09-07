@@ -868,11 +868,69 @@ legend {
 .media-grid img,
 .media-grid video {
   width: 100%;
-  max-height: 35rem;
-  min-height: 15rem;
+  max-height: min(35rem, 72vh);
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   background: #090909;
+  user-select: none;
+}
+.media-grid img {
+  height: auto;
+}
+.media-image-trigger {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 0;
+  color: inherit;
+  background: #090909;
+  text-align: inherit;
+  user-select: none;
+}
+.media-image-trigger:focus-visible {
+  z-index: 1;
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+.media-image-zoom {
+  width: 2.25rem;
+  height: 2.25rem;
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(0 0 0 / 0.58);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.media-image-trigger:hover .media-image-zoom,
+.media-image-trigger:focus-visible .media-image-zoom {
+  opacity: 1;
+}
+.media-image-zoom svg {
+  width: 1rem;
+  height: 1rem;
+}
+.media-lightbox {
+  display: grid;
+  place-items: center;
+  min-height: 10rem;
+  background: #090909;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.media-lightbox img {
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 10rem);
+  object-fit: contain;
   user-select: none;
 }
 .media-grid.count-2 img,
