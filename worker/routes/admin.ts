@@ -86,7 +86,7 @@ admin.get("/overview", async (c) => {
     c.env.DB.prepare(
       "SELECT a.*,u.display_name actor_name FROM audit_log a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.created_at DESC LIMIT 50",
     ).all(),
-    getStorageUsage(c.env.DB),
+    getStorageUsage(c.env.DB, c.env.MEDIA),
   ]);
   return c.json({
     counts,

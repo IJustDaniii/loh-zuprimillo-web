@@ -3,6 +3,7 @@ import { AppError, privateHeaders } from "../lib/http";
 import {
   D1_UPLOAD_RESERVE_BYTES,
   getStorageLimits,
+  listR2Storage,
   readD1StorageBytes,
   releaseR2Storage,
   reserveR2Storage,
@@ -91,10 +92,13 @@ media.post("/", requireCsrf, async (c) => {
       "D1_STORAGE_LIMIT",
       "La base de datos esta en su limite preventivo. Dani debe liberar espacio antes de subir mas archivos.",
     );
+  const r2Usage = await listR2Storage(c.env.MEDIA);
   const reserved = await reserveR2Storage(
     c.env.DB,
     file.size,
     limits.r2LimitBytes,
+    r2Usage.bytes,
+    r2Usage.objects,
   );
   if (!reserved)
     throw new AppError(

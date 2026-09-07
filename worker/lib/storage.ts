@@ -19,6 +19,11 @@ export type StorageUsage = {
   d1: StorageMeter;
 };
 
+export type R2StorageSnapshot = {
+  bytes: number;
+  objects: number;
+};
+
 export function parseLimitMb(
   value: unknown,
   fallback: number,
@@ -32,6 +37,33 @@ export function parseLimitMb(
 
 export function bytesFromMb(mb: number): number {
   return mb * BYTES_PER_MB;
+}
+
+export async function listR2Storage(
+  media: R2Bucket,
+): Promise<R2StorageSnapshot> {
+  let bytes = 0;
+  let objects = 0;
+  let cursor: string | undefined;
+
+  // R2 list pagination uses `truncated` and `cursor`, not page length.
+  // Source: https://developers.cloudflare.com/r2/api/workers/workers-api-reference/
+  do {
+    const listed = await media.list({
+      limit: 1_000,
+      ...(cursor ? { cursor } : {}),
+    });
+    objects += listed.objects.length;
+    bytes += listed.objects.reduce(
+      (total, object) => total + Math.max(0, Number(object.size) || 0),
+      0,
+    );
+    if (listed.truncated && !listed.cursor)
+      throw new Error("R2 returned a truncated listing without a cursor");
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+
+  return { bytes, objects };
 }
 
 export function meter(usedBytes: number, limitBytes: number): StorageMeter {
@@ -122,16 +154,20 @@ export async function readD1StorageBytes(db: D1Database): Promise<number> {
   return Math.max(0, Number(result.meta.size_after) || 0);
 }
 
-export async function getStorageUsage(db: D1Database): Promise<StorageUsage> {
-  const r2 = await ensureStorageUsage(db);
+export async function getStorageUsage(
+  db: D1Database,
+  media: R2Bucket,
+): Promise<StorageUsage> {
+  await ensureStorageUsage(db);
+  const r2 = await listR2Storage(media);
   const [limits, d1Bytes] = await Promise.all([
     readLimits(db),
     readD1StorageBytes(db),
   ]);
   return {
     r2: {
-      ...meter(Number(r2?.bytes ?? 0), limits.r2LimitBytes),
-      objects: Number(r2?.objects ?? 0),
+      ...meter(r2.bytes, limits.r2LimitBytes),
+      objects: r2.objects,
     },
     d1: meter(d1Bytes, limits.d1LimitBytes),
   };
@@ -141,15 +177,24 @@ export async function reserveR2Storage(
   db: D1Database,
   bytes: number,
   limitBytes: number,
+  actualBytes: number,
+  actualObjects: number,
 ): Promise<boolean> {
   await ensureStorageUsage(db);
   const result = await db
     .prepare(
       `UPDATE storage_usage
-       SET r2_bytes=r2_bytes+?,r2_objects=r2_objects+1,updated_at=datetime('now')
-       WHERE id=1 AND r2_bytes+?<=?`,
+       SET r2_bytes=MAX(r2_bytes,?)+?,r2_objects=MAX(r2_objects,?)+1,updated_at=datetime('now')
+       WHERE id=1 AND MAX(r2_bytes,?)+?<=?`,
     )
-    .bind(bytes, bytes, limitBytes)
+    .bind(
+      Math.max(0, actualBytes),
+      bytes,
+      Math.max(0, actualObjects),
+      Math.max(0, actualBytes),
+      bytes,
+      limitBytes,
+    )
     .run();
   return Number(result.meta.changes) > 0;
 }
@@ -170,9 +215,6 @@ export async function releaseR2Storage(
 }
 
 export async function getStorageLimits(db: D1Database) {
-  const usage = await getStorageUsage(db);
-  return {
-    r2LimitBytes: usage.r2.limitBytes,
-    d1LimitBytes: usage.d1.limitBytes,
-  };
+  await ensureStorageUsage(db);
+  return readLimits(db);
 }

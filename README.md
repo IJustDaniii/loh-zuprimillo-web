@@ -131,6 +131,10 @@ La aplicaciÃ³n incluye topes preventivos configurables desde **AdministraciÃ�
 
 Estos controles protegen el almacenamiento de esta aplicaciÃ³n. No pueden limitar otros Workers, buckets, consultas desde la consola ni operaciones externas de la cuenta de Cloudflare; revisa tambiÃ©n el panel de facturaciÃ³n de Cloudflare.
 
+### Fuente real de R2
+
+El resumen de R2 del panel se calcula listando directamente `env.MEDIA` con la API de bindings de Workers, recorriendo todas las páginas y sumando el tamaño de cada objeto. El contador de D1 queda únicamente como reserva atómica para coordinar subidas simultáneas. Si alguien añade objetos manualmente en R2, el panel los refleja en la siguiente consulta y una subida nueva los tiene en cuenta antes de reservar espacio.
+
 ## Comandos de calidad
 
 ```bash
