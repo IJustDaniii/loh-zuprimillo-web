@@ -7,6 +7,7 @@ import {
   readD1StorageBytes,
   releaseR2Storage,
   reserveR2Storage,
+  type R2StorageSnapshot,
 } from "../lib/storage";
 import { requireAuth, requireCsrf } from "../middleware/auth";
 import type { AppEnv } from "../types";
@@ -92,7 +93,16 @@ media.post("/", requireCsrf, async (c) => {
       "D1_STORAGE_LIMIT",
       "La base de datos esta en su limite preventivo. Dani debe liberar espacio antes de subir mas archivos.",
     );
-  const r2Usage = await listR2Storage(c.env.MEDIA);
+  let r2Usage: R2StorageSnapshot;
+  try {
+    r2Usage = await listR2Storage(c.env.MEDIA);
+  } catch {
+    throw new AppError(
+      503,
+      "R2_USAGE_UNAVAILABLE",
+      "No se puede comprobar el almacenamiento de archivos ahora mismo. Intentalo de nuevo.",
+    );
+  }
   const reserved = await reserveR2Storage(
     c.env.DB,
     file.size,
