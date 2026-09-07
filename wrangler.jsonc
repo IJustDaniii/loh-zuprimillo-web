@@ -27,7 +27,4 @@
     "APP_ORIGIN": "http://localhost:5173",
     "SESSION_TTL_DAYS": "30",
   },
-  "secrets": {
-    "required": ["BOOTSTRAP_TOKEN"],
-  },
 }
