@@ -6,14 +6,14 @@
   "packageManager": "npm@11.19.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; vite build",
-    "deploy": "npm run build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; wrangler deploy",
+    "build": "tsc -b && vite build",
+    "deploy": "npm run build && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply loh-zuprimillo-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply loh-zuprimillo-db --remote",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm run build",
+    "check": "npm run typecheck && npm test && npm run build",
     "cf:types": "wrangler types"
   },
   "dependencies": {
