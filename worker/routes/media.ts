@@ -70,6 +70,19 @@ media.post("/", requireCsrf, async (c) => {
       "FILE_TYPE_BLOCKED",
       "Ese tipo de archivo no está permitido.",
     );
+  const id = crypto.randomUUID();
+  const key = `${c.get("member").id}/${new Date().toISOString().slice(0, 10)}/${id}`;
+  const buffer = await file.arrayBuffer();
+  if (!matchesSignature(file.type, new Uint8Array(buffer)))
+    throw new AppError(
+      415,
+      "FILE_SIGNATURE_INVALID",
+      "El contenido del archivo no coincide con su tipo declarado.",
+    );
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  const sha = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
   const limits = await getStorageLimits(c.env.DB);
   const d1Bytes = await readD1StorageBytes(c.env.DB);
   if (d1Bytes + D1_UPLOAD_RESERVE_BYTES > limits.d1LimitBytes)
@@ -89,19 +102,6 @@ media.post("/", requireCsrf, async (c) => {
       "R2_STORAGE_LIMIT",
       "El almacenamiento de archivos esta lleno. Dani debe liberar espacio antes de subir mas archivos.",
     );
-  const id = crypto.randomUUID();
-  const key = `${c.get("member").id}/${new Date().toISOString().slice(0, 10)}/${id}`;
-  const buffer = await file.arrayBuffer();
-  if (!matchesSignature(file.type, new Uint8Array(buffer)))
-    throw new AppError(
-      415,
-      "FILE_SIGNATURE_INVALID",
-      "El contenido del archivo no coincide con su tipo declarado.",
-    );
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  const sha = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
   try {
     await c.env.MEDIA.put(key, buffer, {
       httpMetadata: { contentType: file.type },
