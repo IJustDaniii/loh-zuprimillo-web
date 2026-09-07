@@ -70,6 +70,20 @@ export async function audit(
     .run();
 }
 
+export async function deleteLoreEntry(
+  db: D1Database,
+  loreId: string,
+): Promise<{ id: string; status: string } | null> {
+  const lore = await db
+    .prepare("SELECT id,status FROM lore_entries WHERE id=?")
+    .bind(loreId)
+    .first<{ id: string; status: string }>();
+  if (!lore) return null;
+
+  await db.prepare("DELETE FROM lore_entries WHERE id=?").bind(loreId).run();
+  return lore;
+}
+
 export async function notify(
   db: D1Database,
   userId: string,
