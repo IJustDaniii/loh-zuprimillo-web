@@ -1,0 +1,40 @@
+{
+  "name": "loh-zuprimillo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.19.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; vite build",
+    "deploy": "npm run build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply loh-zuprimillo-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply loh-zuprimillo-db --remote",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm run build",
+    "cf:types": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.9.7",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.2",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260907.1",
+    "@types/leaflet": "^1.9.20",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "typescript": "^5.9.2",
+    "prettier": "^3.6.2",
+    "vite": "^7.1.4",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.33.2"
+  }
+}
