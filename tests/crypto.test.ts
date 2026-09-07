@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   hashPassword,
+  PASSWORD_HASH_ITERATIONS,
   randomToken,
   sha256,
   verifyPassword,
 } from "../worker/lib/crypto";
 
 describe("password hashing", () => {
+  it("usa un lÃ­mite de iteraciones compatible con Cloudflare Workers", () => {
+    expect(PASSWORD_HASH_ITERATIONS).toBeLessThanOrEqual(100_000);
+  });
+
   it("verifica la contraseña correcta y rechaza otra", async () => {
     const password = await hashPassword("una contraseña larga");
     expect(

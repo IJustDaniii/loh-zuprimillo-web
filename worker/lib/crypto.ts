@@ -1,5 +1,9 @@
 const encoder = new TextEncoder();
 
+// Cloudflare Workers rejects PBKDF2 iteration counts above 100,000.
+// Keep this value explicit so the production constraint is covered by tests.
+export const PASSWORD_HASH_ITERATIONS = 100_000;
+
 export function randomToken(bytes = 32): string {
   const buffer = crypto.getRandomValues(new Uint8Array(bytes));
   return toBase64Url(buffer);
@@ -46,7 +50,7 @@ export async function hashPassword(
       name: "PBKDF2",
       hash: "SHA-256",
       salt: fromBase64Url(salt).buffer as ArrayBuffer,
-      iterations: 310_000,
+      iterations: PASSWORD_HASH_ITERATIONS,
     },
     key,
     256,

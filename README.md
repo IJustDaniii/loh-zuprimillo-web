@@ -100,7 +100,7 @@ Abre `http://localhost:5173`; Vite envía `/api` al Worker.
 
 ## Seguridad y privacidad
 
-- Contraseñas: PBKDF2-SHA-256 de Web Crypto, 310.000 iteraciones y sal aleatoria individual.
+- Contraseñas: PBKDF2-SHA-256 de Web Crypto, 100.000 iteraciones y sal aleatoria individual. Es el máximo compatible con Cloudflare Workers.
 - Sesiones: token aleatorio de 256 bits; solo su SHA-256 llega a D1; cookie `HttpOnly`, `Secure`, `SameSite=Strict`.
 - Mutaciones: token CSRF de doble envío ligado a la sesión y verificación de `Origin`.
 - Login: límite combinado por usuario e IP, sin usar la IP como identidad.
