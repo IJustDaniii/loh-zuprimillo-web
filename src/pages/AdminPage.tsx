@@ -162,6 +162,27 @@ export function AdminPage() {
       "Entrada de lore eliminada",
     );
   };
+  const cleanupMedia = async () => {
+    if (
+      !confirm(
+        "Se eliminarán los objetos de R2 sin registro y los adjuntos de publicaciones o comentarios ya borrados. ¿Continuar?",
+      )
+    )
+      return;
+    try {
+      const result = await postJson<{
+        deletedObjects: number;
+        deletedMediaRows: number;
+        staleMediaWithoutObject: number;
+      }>("/api/admin/media/cleanup", {});
+      setMessage(
+        `Limpieza completada: ${result.deletedObjects} objetos de R2 y ${result.deletedMediaRows} registros eliminados.`,
+      );
+      await load();
+    } catch (caught: any) {
+      setMessage(caught.message);
+    }
+  };
   const createInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -477,7 +498,18 @@ export function AdminPage() {
               </div>
             ))}
           </Section>
-          <Section title="Archivos privados en R2">
+          <Section
+            title="Archivos privados en R2"
+            action={
+              <button
+                className="button secondary small"
+                onClick={() => void cleanupMedia()}
+              >
+                <Trash2 />
+                Limpiar huérfanos
+              </button>
+            }
+          >
             {data.media.length ? (
               data.media.map((item: any) => (
                 <div className="content-admin-row" key={item.id}>

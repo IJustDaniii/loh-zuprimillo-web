@@ -5,10 +5,14 @@ import { audit, deleteLoreEntry } from "../lib/db";
 import { randomToken, sha256 } from "../lib/crypto";
 import { AppError, jsonBody } from "../lib/http";
 import {
+  findOrphanR2Objects,
   getStorageUsage,
+  listR2Objects,
   MAX_D1_LIMIT_MB,
   MAX_R2_LIMIT_MB,
   parseLimitMb,
+  purgeMediaStorage,
+  type MediaStorageReference,
 } from "../lib/storage";
 import { requireAdmin, requireAuth, requireCsrf } from "../middleware/auth";
 import type { AppEnv } from "../types";
@@ -288,6 +292,28 @@ admin.patch("/posts/:id", requireCsrf, async (c) => {
 });
 
 admin.delete("/comments/:id", requireCsrf, async (c) => {
+  const mediaRows = await c.env.DB.prepare(
+    "SELECT id,r2_key,byte_size FROM media WHERE comment_id=?",
+  )
+    .bind(c.req.param("id"))
+    .all<{ id: string; r2_key: string; byte_size: number }>();
+  try {
+    await purgeMediaStorage(
+      c.env.DB,
+      c.env.MEDIA,
+      mediaRows.results.map((media) => ({
+        id: media.id,
+        r2Key: media.r2_key,
+        byteSize: media.byte_size,
+      })),
+    );
+  } catch {
+    throw new AppError(
+      503,
+      "MEDIA_DELETE_FAILED",
+      "No se pudieron borrar todos los archivos de R2. Inténtalo de nuevo.",
+    );
+  }
   await c.env.DB.prepare(
     "UPDATE comments SET deleted_at=datetime('now'),body='' WHERE id=?",
   )
@@ -303,6 +329,82 @@ admin.delete("/comments/:id", requireCsrf, async (c) => {
   return c.body(null, 204);
 });
 
+admin.post("/media/cleanup", requireCsrf, async (c) => {
+  const [mediaRows, staleRows] = await Promise.all([
+    c.env.DB.prepare("SELECT id,r2_key,byte_size FROM media").all<{
+      id: string;
+      r2_key: string;
+      byte_size: number;
+    }>(),
+    c.env.DB.prepare(
+      `SELECT m.id,m.r2_key,m.byte_size
+       FROM media m
+       WHERE EXISTS (
+         SELECT 1 FROM posts p
+         WHERE p.id=m.post_id AND p.deleted_at IS NOT NULL
+       ) OR EXISTS (
+         SELECT 1 FROM comments comment_media
+         JOIN posts comment_post ON comment_post.id=comment_media.post_id
+         WHERE comment_media.id=m.comment_id
+           AND (comment_media.deleted_at IS NOT NULL OR comment_post.deleted_at IS NOT NULL)
+       )`,
+    ).all<{ id: string; r2_key: string; byte_size: number }>(),
+  ]);
+  let objects;
+  try {
+    objects = await listR2Objects(c.env.MEDIA);
+  } catch {
+    throw new AppError(
+      503,
+      "R2_CLEANUP_UNAVAILABLE",
+      "No se pudo revisar el bucket de R2. Inténtalo de nuevo.",
+    );
+  }
+  const references = mediaRows.results.map((media) => media.r2_key);
+  const staleReferences: MediaStorageReference[] = staleRows.results.map(
+    (media) => ({
+      id: media.id,
+      r2Key: media.r2_key,
+      byteSize: media.byte_size,
+    }),
+  );
+  const staleKeys = new Set(staleReferences.map((media) => media.r2Key));
+  const bucketKeys = new Set(objects.map((object) => object.key));
+  const orphanObjects = findOrphanR2Objects(objects, new Set(references));
+  const staleObjects = objects.filter((object) => staleKeys.has(object.key));
+  try {
+    await purgeMediaStorage(c.env.DB, c.env.MEDIA, staleReferences);
+    for (const object of orphanObjects) await c.env.MEDIA.delete(object.key);
+  } catch {
+    throw new AppError(
+      503,
+      "R2_CLEANUP_FAILED",
+      "No se pudieron limpiar todos los archivos de R2. Inténtalo de nuevo.",
+    );
+  }
+  await audit(
+    c.env.DB,
+    c.get("member").id,
+    "MEDIA_CLEANUP",
+    "media",
+    undefined,
+    {
+      deletedObjects: orphanObjects.length + staleObjects.length,
+      deletedMediaRows: staleReferences.length,
+      staleMediaWithoutObject: staleReferences.filter(
+        (media) => !bucketKeys.has(media.r2Key),
+      ).length,
+    },
+  );
+  return c.json({
+    deletedObjects: orphanObjects.length + staleObjects.length,
+    deletedMediaRows: staleReferences.length,
+    staleMediaWithoutObject: staleReferences.filter(
+      (media) => !bucketKeys.has(media.r2Key),
+    ).length,
+  });
+});
+
 admin.delete("/media/:id", requireCsrf, async (c) => {
   const media = await c.env.DB.prepare(
     "SELECT r2_key,byte_size FROM media WHERE id=?",
@@ -311,16 +413,21 @@ admin.delete("/media/:id", requireCsrf, async (c) => {
     .first<{ r2_key: string; byte_size: number }>();
   if (!media)
     throw new AppError(404, "MEDIA_NOT_FOUND", "Archivo no encontrado.");
-  await c.env.MEDIA.delete(media.r2_key);
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      "UPDATE users SET avatar_media_id=NULL WHERE avatar_media_id=?",
-    ).bind(c.req.param("id")),
-    c.env.DB.prepare("DELETE FROM media WHERE id=?").bind(c.req.param("id")),
-    c.env.DB.prepare(
-      "UPDATE storage_usage SET r2_bytes=MAX(0,r2_bytes-?),r2_objects=MAX(0,r2_objects-1),updated_at=datetime('now') WHERE id=1",
-    ).bind(media.byte_size),
-  ]);
+  try {
+    await purgeMediaStorage(c.env.DB, c.env.MEDIA, [
+      {
+        id: c.req.param("id"),
+        r2Key: media.r2_key,
+        byteSize: media.byte_size,
+      },
+    ]);
+  } catch {
+    throw new AppError(
+      503,
+      "MEDIA_DELETE_FAILED",
+      "No se pudo borrar el archivo de R2. Inténtalo de nuevo.",
+    );
+  }
   await audit(
     c.env.DB,
     c.get("member").id,

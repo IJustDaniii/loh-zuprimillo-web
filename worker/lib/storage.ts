@@ -24,6 +24,11 @@ export type R2StorageSnapshot = {
   objects: number;
 };
 
+export type R2StorageObject = {
+  key: string;
+  size: number;
+};
+
 export function parseLimitMb(
   value: unknown,
   fallback: number,
@@ -39,11 +44,10 @@ export function bytesFromMb(mb: number): number {
   return mb * BYTES_PER_MB;
 }
 
-export async function listR2Storage(
+export async function listR2Objects(
   media: R2Bucket,
-): Promise<R2StorageSnapshot> {
-  let bytes = 0;
-  let objects = 0;
+): Promise<R2StorageObject[]> {
+  const objects: R2StorageObject[] = [];
   let cursor: string | undefined;
 
   // R2 list pagination uses `truncated` and `cursor`, not page length.
@@ -53,17 +57,76 @@ export async function listR2Storage(
       limit: 1_000,
       ...(cursor ? { cursor } : {}),
     });
-    objects += listed.objects.length;
-    bytes += listed.objects.reduce(
-      (total, object) => total + Math.max(0, Number(object.size) || 0),
-      0,
+    objects.push(
+      ...listed.objects.map((object) => ({
+        key: object.key,
+        size: Math.max(0, Number(object.size) || 0),
+      })),
     );
     if (listed.truncated && !listed.cursor)
       throw new Error("R2 returned a truncated listing without a cursor");
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
 
-  return { bytes, objects };
+  return objects;
+}
+
+export async function listR2Storage(
+  media: R2Bucket,
+): Promise<R2StorageSnapshot> {
+  const objects = await listR2Objects(media);
+  return {
+    bytes: objects.reduce((total, object) => total + object.size, 0),
+    objects: objects.length,
+  };
+}
+
+export function findOrphanR2Objects(
+  objects: R2StorageObject[],
+  referencedKeys: ReadonlySet<string>,
+): R2StorageObject[] {
+  return objects.filter((object) => !referencedKeys.has(object.key));
+}
+
+export type MediaStorageReference = {
+  id: string;
+  r2Key: string;
+  byteSize: number;
+};
+
+export async function purgeMediaStorage(
+  db: D1Database,
+  media: R2Bucket,
+  references: MediaStorageReference[],
+): Promise<void> {
+  if (!references.length) return;
+  await ensureStorageUsage(db);
+  for (const reference of references) await media.delete(reference.r2Key);
+
+  const chunkSize = 100;
+  for (let index = 0; index < references.length; index += chunkSize) {
+    const chunk = references.slice(index, index + chunkSize);
+    const placeholders = chunk.map(() => "?").join(",");
+    const byteSize = chunk.reduce(
+      (total, reference) => total + Math.max(0, Number(reference.byteSize) || 0),
+      0,
+    );
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE users SET avatar_media_id=NULL WHERE avatar_media_id IN (${placeholders})`,
+        )
+        .bind(...chunk.map((reference) => reference.id)),
+      db
+        .prepare(`DELETE FROM media WHERE id IN (${placeholders})`)
+        .bind(...chunk.map((reference) => reference.id)),
+      db
+        .prepare(
+          "UPDATE storage_usage SET r2_bytes=MAX(0,r2_bytes-?),r2_objects=MAX(0,r2_objects-?),updated_at=datetime('now') WHERE id=1",
+        )
+        .bind(byteSize, chunk.length),
+    ]);
+  }
 }
 
 export function meter(usedBytes: number, limitBytes: number): StorageMeter {

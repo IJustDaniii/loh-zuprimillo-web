@@ -8,6 +8,7 @@ import {
 } from "../../shared/schemas";
 import { addXp, hydratePosts, notify, postSelect } from "../lib/db";
 import { AppError, jsonBody } from "../lib/http";
+import { purgeMediaStorage } from "../lib/storage";
 import { requireAuth, requireCsrf } from "../middleware/auth";
 import type { AppEnv } from "../types";
 
@@ -327,6 +328,31 @@ posts.delete("/:id", requireCsrf, async (c) => {
       "POST_FORBIDDEN",
       "Solo su autor o Dani pueden eliminarla.",
     );
+  const mediaRows = await c.env.DB.prepare(
+    `SELECT m.id,m.r2_key,m.byte_size
+     FROM media m
+     LEFT JOIN comments comment_media ON comment_media.id=m.comment_id
+     WHERE m.post_id=? OR comment_media.post_id=?`,
+  )
+    .bind(c.req.param("id"), c.req.param("id"))
+    .all<{ id: string; r2_key: string; byte_size: number }>();
+  try {
+    await purgeMediaStorage(
+      c.env.DB,
+      c.env.MEDIA,
+      mediaRows.results.map((media) => ({
+        id: media.id,
+        r2Key: media.r2_key,
+        byteSize: media.byte_size,
+      })),
+    );
+  } catch {
+    throw new AppError(
+      503,
+      "MEDIA_DELETE_FAILED",
+      "No se pudieron borrar todos los archivos de R2. Inténtalo de nuevo.",
+    );
+  }
   await c.env.DB.prepare(
     "UPDATE posts SET deleted_at=datetime('now'),updated_at=datetime('now') WHERE id=?",
   )

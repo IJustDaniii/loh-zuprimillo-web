@@ -152,3 +152,4 @@ Las decisiones de alcance están en [`docs/SPEC.md`](docs/SPEC.md), el mapa de m
 - Nueva configuración: añade una fila a `app_settings` en una migración y su control correspondiente si requiere UI específica.
 - Nueva función: crea una ruta pequeña en `worker/routes`, el componente/página en `src`, un contrato en `shared` y una migración incremental; no edites `0001_initial.sql` una vez esté en producción.
 - Los objetos R2 se referencian por `media.id`; nunca guardes URLs externas permanentes.
+- Al borrar una publicación o un comentario, el Worker elimina también sus adjuntos de R2 y sus registros de D1. En Administración → Contenido → Archivos privados en R2, “Limpiar huérfanos” retira objetos sin referencia y adjuntos de contenido ya borrado.
