@@ -24,7 +24,7 @@
     },
   ],
   "vars": {
-    "APP_ORIGIN": "http://localhost:5173",
+    "APP_ORIGIN": "https://okeysuites.es",
     "SESSION_TTL_DAYS": "30",
   },
 }
